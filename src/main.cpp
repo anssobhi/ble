@@ -142,6 +142,10 @@ void bleInit() {
   );
   pCharacteristic->setAccessPermissions(ESP_GATT_PERM_READ_ENCRYPTED | ESP_GATT_PERM_WRITE_ENCRYPTED);
   pCharacteristic->setCallbacks(new WifiCharacteristicCallback());
+  BLEDescriptor* wifides = new BLEDescriptor(BLEUUID((uint16_t)0x2901));
+  wifides->setValue("wifi-credential");
+  pCharacteristic->addDescriptor(wifides);
+  //pCharacteristic->addDescriptor(new BLE2902());
 
   pService->start();
 
