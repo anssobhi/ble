@@ -8,10 +8,13 @@
 // BLE إعدادات
 BLEServer* pServer = NULL;
 BLECharacteristic* pCharacteristic = NULL;
+BLECharacteristic *pMacCharacteristic = NULL;
 Preferences preferences;
-
+// MAC عنوان
+String macAddress = "";
 #define SERVICE_UUID        "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define WIFI_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define MAC_UUID "abcdef12-3456-7890-abcd-ef1234567890"
 #define PASSKEY 999999
 
 // وظيفة الاتصال بالشبكة Wi-Fi
@@ -44,7 +47,7 @@ class WifiCharacteristicCallback : public BLECharacteristicCallbacks {
         Serial.print("Received WiFi Credentials: ");
         Serial.println(value.c_str());
 
-        int sep = value.find("|");
+        int sep = value.find(":");
         if (sep != std::string::npos) {
           String ssid = String(value.substr(0, sep).c_str());
           String pass = String(value.substr(sep + 1).c_str());
@@ -134,8 +137,9 @@ void bleInit() {
 
   BLEService *pService = pServer->createService(SERVICE_UUID);
   
+  // إنشاء خاصية Wi-Fi
   pCharacteristic = pService->createCharacteristic(
-    CHARACTERISTIC_UUID,
+    WIFI_UUID,
     BLECharacteristic::PROPERTY_READ |
     BLECharacteristic::PROPERTY_WRITE |
     BLECharacteristic::PROPERTY_NOTIFY
@@ -146,7 +150,13 @@ void bleInit() {
   wifides->setValue("wifi-credential");
   pCharacteristic->addDescriptor(wifides);
   //pCharacteristic->addDescriptor(new BLE2902());
-
+  // إنشاء خاصية MAC
+  pMacCharacteristic = pService->createCharacteristic(
+    MAC_UUID,
+    BLECharacteristic::PROPERTY_READ
+  );
+  pMacCharacteristic->setAccessPermissions(ESP_GATT_PERM_READ_ENCRYPTED | ESP_GATT_PERM_WRITE_ENCRYPTED);
+  pMacCharacteristic->setValue(macAddress.c_str());
   pService->start();
 
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
@@ -166,7 +176,11 @@ void setup() {
   String ssid = preferences.getString("ssid", "");
   String pass = preferences.getString("password", "");
   preferences.end();
-
+  
+  WiFi.mode(WIFI_STA);
+  macAddress = WiFi.macAddress();
+  Serial.print("MAC Address: ");
+  Serial.println(macAddress);
   bleInit();
 
   if (ssid != "") {
