@@ -4,6 +4,11 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+#define ENABLE_USER_AUTH
+#define ENABLE_DATABASE
+#include <FirebaseClient.h>
+#include "ExampleFunctions.h"
+
 
 // BLE إعدادات
 BLEServer* pServer = NULL;
@@ -16,6 +21,29 @@ String macAddress = "";
 #define WIFI_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 #define MAC_UUID "abcdef12-3456-7890-abcd-ef1234567890"
 #define PASSKEY 999999
+
+// configure firebase
+#define API_KEY "AIzaSyAckLpD06AhyjlVdbTHiXTCstclomOipHQ"
+#define USER_EMAIL "anssobhi1996@gmail.com"
+#define USER_PASSWORD "123456"
+#define DATABASE_URL "https://rtdb-3efa6-default-rtdb.firebaseio.com"
+
+void processData(AsyncResult &aResult);
+
+SSL_CLIENT ssl_client;
+using AsyncClient = AsyncClientClass;
+AsyncClient aClient(ssl_client);
+
+UserAuth user_auth(API_KEY, USER_EMAIL, USER_PASSWORD, 3000 /* expire period in seconds (<3600) */);
+FirebaseApp app;
+RealtimeDatabase Database;
+AsyncResult databaseResult;
+
+// Timer variables for sending data every 10 seconds
+unsigned long lastSendTime = 0;
+const unsigned long sendInterval = 5000; // 10 seconds in milliseconds
+
+#define LED_PIN 2
 
 // وظيفة الاتصال بالشبكة Wi-Fi
 void connectToWiFi(String ssid, String password) {
@@ -186,8 +214,54 @@ void setup() {
   if (ssid != "") {
     connectToWiFi(ssid, pass);
   }
+   //set_ssl_client_insecure_and_buffer(ssl_client);
+  ssl_client.setInsecure();
+  //ssl_client.setConnectionTimeout(1000);
+  ssl_client.setHandshakeTimeout(5);
+
+    Serial.println("Initializing app...");
+    initializeApp(aClient, app, getAuth(user_auth), auth_debug_print, "🔐 authTask");
+
+    app.getApp<RealtimeDatabase>(Database);
+    Database.url(DATABASE_URL);
+
 }
 
 void loop() {
-  // لا حاجة لدورة مستمرة هنا
+    app.loop();
+  processData(databaseResult);
+
+  if (app.ready() && millis() - lastSendTime > sendInterval) {
+    lastSendTime = millis();
+
+    // قراءة قيمة مرة واحدة من Firebase
+    Database.get(aClient,"/ledStatus",processData);
+  }
+}
+
+void processData(AsyncResult &aResult)
+{
+    // Exits when no result available when calling from the loop.
+    if (!aResult.isResult())
+        return;
+
+    if (aResult.isEvent())
+    {
+        Firebase.printf("Event task: %s, msg: %s, code: %d\n", aResult.uid().c_str(), aResult.eventLog().message().c_str(), aResult.eventLog().code());
+    }
+
+    if (aResult.isDebug())
+    {
+        Firebase.printf("Debug task: %s, msg: %s\n", aResult.uid().c_str(), aResult.debug().c_str());
+    }
+
+    if (aResult.isError())
+    {
+        Firebase.printf("Error task: %s, msg: %s, code: %d\n", aResult.uid().c_str(), aResult.error().message().c_str(), aResult.error().code());
+    }
+
+    if (aResult.available())
+    {
+        Firebase.printf("task: %s, payload: %s\n", aResult.uid().c_str(), aResult.c_str());
+    }
 }
